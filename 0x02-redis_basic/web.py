@@ -1,43 +1,67 @@
 #!/usr/bin/env python3
 """
-This module defines the get_page function to fetch
-and cache HTML content from a URL.
+This module defines the get_page function to
+fetch and cache HTML content from a URL.
 """
 
-import redis
 import requests
+import redis
+from typing import Callable
 from functools import wraps
 
-r = redis.Redis()
+
+def cache_with_expiry(expiry: int) -> Callable:
+    """
+    Decorator to cache the result of a
+    function call with a specified expiry time.
+
+    Args:
+        expiry (int): Expiry time in seconds.
+
+    Returns:
+        Callable: The decorated function.
+    """
+    def decorator(func: Callable) -> Callable:
+        @wraps(func)
+        def wrapper(url: str) -> str:
+            r = redis.Redis()
+            cache_key = f"cache:{url}"
+            count_key = f"count:{url}"
+
+            # Increment the access count
+            r.incr(count_key)
+
+            # Try to get cached result
+            cached_result = r.get(cache_key)
+            if cached_result:
+                return cached_result.decode('utf-8')
+
+            # If not cached, fetch the content
+            result = func(url)
+            r.setex(cache_key, expiry, result)
+            return result
+
+        return wrapper
+    return decorator
 
 
-def url_access_count(method):
-    """decorator for get_page function"""
-    @wraps(method)
-    def wrapper(url):
-        """wrapper function"""
-        key = "cached:" + url
-        cached_value = r.get(key)
-        if cached_value:
-            return cached_value.decode("utf-8")
-
-            # Get new content and update cache
-        key_count = "count:" + url
-        html_content = method(url)
-
-        r.incr(key_count)
-        r.set(key, html_content, ex=10)
-        r.expire(key, 10)
-        return html_content
-    return wrapper
-
-
-@url_access_count
+@cache_with_expiry(10)
 def get_page(url: str) -> str:
-    """obtain the HTML content of a particular"""
-    results = requests.get(url)
-    return results.text
+    """
+    Fetch HTML content from a URL and cache it.
+
+    Args:
+        url (str): The URL to fetch content from.
+
+    Returns:
+        str: The HTML content of the URL.
+    """
+    response = requests.get(url)
+    return response.text
 
 
 if __name__ == "__main__":
-    get_page('http://slowwly.robertomurray.co.uk')
+    url = "http://slowwly.robertomurray.co.uk"
+    print(get_page(url))
+    print(get_page(url))
+    print(get_page(url))
