@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """
-This module defines the get_page function to fetch and cache HTML content from a URL.
+This module defines the get_page function to fetch
+and cache HTML content from a URL.
 """
 
 import redis
