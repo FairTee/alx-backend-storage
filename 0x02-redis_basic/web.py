@@ -48,7 +48,7 @@ def cache_with_expiry(expiry: int) -> Callable:
 @cache_with_expiry(10)
 def get_page(url: str) -> str:
     """
-    Fetch HTML content from a URL and cache it.
+    Fetch HTML content from a URL and cache it
 
     Args:
         url (str): The URL to fetch content from.
