@@ -1,67 +1,34 @@
 #!/usr/bin/env python3
 """
-This module defines the get_page function to
-fetch and cache HTML content from a URL.
+Implements an expiring web cache and tracker
 """
-
-import requests
-import redis
 from typing import Callable
 from functools import wraps
+import redis
+import requests
+redis_client = redis.Redis()
 
 
-def cache_with_expiry(expiry: int) -> Callable:
-    """
-    Decorator to cache the result of a
-    function call with a specified expiry time.
-
-    Args:
-        expiry (int): Expiry time in seconds.
-
-    Returns:
-        Callable: The decorated function.
-    """
-    def decorator(func: Callable) -> Callable:
-        @wraps(func)
-        def wrapper(url: str) -> str:
-            r = redis.Redis()
-            cache_key = f"cache:{url}"
-            count_key = f"count:{url}"
-
-            # Increment the access count
-            r.incr(count_key)
-
-            # Try to get cached result
-            cached_result = r.get(cache_key)
-            if cached_result:
-                return cached_result.decode('utf-8')
-
-            # If not cached, fetch the content
-            result = func(url)
-            r.setex(cache_key, expiry, result)
-            return result
-
-        return wrapper
-    return decorator
+def url_count(method: Callable) -> Callable:
+    """counts how many times an url is accessed"""
+    @wraps(method)
+    def wrapper(*args, **kwargs):
+        url = args[0]
+        redis_client.incr(f"count:{url}")
+        cached = redis_client.get(f'{url}')
+        if cached:
+            return cached.decode('utf-8')
+        redis_client.setex(f'{url}, 10, {method(url)}')
+        return method(*args, **kwargs)
+    return wrapper
 
 
-@cache_with_expiry(10)
+@url_count
 def get_page(url: str) -> str:
-    """
-    Fetch HTML content from a URL and cache it
-
-    Args:
-        url (str): The URL to fetch content from.
-
-    Returns:
-        str: The HTML content of the URL.
-    """
+    """get a page and cache value"""
     response = requests.get(url)
     return response.text
 
 
 if __name__ == "__main__":
-    url = "http://slowwly.robertomurray.co.uk"
-    print(get_page(url))
-    print(get_page(url))
-    print(get_page(url))
+    get_page('http://slowwly.robertomurray.co.uk')
